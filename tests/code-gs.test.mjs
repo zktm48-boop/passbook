@@ -125,3 +125,10 @@ test('findLegacyMatch_ finds the matching ledger line from the bottom', () => {
   assert.equal(gs.findLegacyMatch_(values, header, { ...row, amount: 999 }, 2026, 'Asia/Seoul'), -1);
   assert.equal(gs.findLegacyMatch_(values, header, { ...row, kind: 'income' }, 2026, 'Asia/Seoul'), -1);
 });
+
+test('friendlyError_ translates lock timeouts', () => {
+  const gs = loadGs();
+  assert.match(gs.friendlyError_('잠금 시간초과: 다른 프로세스에서 잠금 상태를 너무 오래 유지하고 있습니다.'), /잠시 후 다시/);
+  assert.match(gs.friendlyError_('Lock timeout: another process was holding the lock for too long.'), /잠시 후 다시/);
+  assert.equal(gs.friendlyError_('토큰이 올바르지 않아요'), '토큰이 올바르지 않아요');
+});

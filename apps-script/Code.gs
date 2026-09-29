@@ -29,18 +29,23 @@ function handle_(req) {
     const token = PropertiesService.getScriptProperties().getProperty('TOKEN');
     if (!token) return json_({ status: 'error', message: '스크립트 속성에 TOKEN이 설정되지 않았어요' });
     if (req.token !== token) return json_({ status: 'error', message: '토큰이 올바르지 않아요' });
-    if (req.action === 'list') return json_(withLock_(list_));
+    if (req.action === 'list') return json_(list_());
     if (req.action === 'add') return json_(withLock_(function () { return add_(req.rows, req.requestId); }));
     if (req.action === 'delete') return json_(withLock_(function () { return remove_(req.id); }));
     return json_({ status: 'error', message: '알 수 없는 요청이에요: ' + req.action });
   } catch (err) {
-    return json_({ status: 'error', message: String((err && err.message) || err) });
+    return json_({ status: 'error', message: friendlyError_(String((err && err.message) || err)) });
   }
+}
+
+function friendlyError_(msg) {
+  if (/잠금|lock/i.test(msg)) return '다른 저장 작업이 진행 중이라 기다리다 멈췄어요. 잠시 후 다시 시도해 주세요';
+  return msg;
 }
 
 function withLock_(fn) {
   const lock = LockService.getScriptLock();
-  lock.waitLock(20000);
+  lock.waitLock(30000);
   try {
     return fn();
   } finally {
@@ -189,6 +194,18 @@ function findLegacyHeader_(values) {
   return null;
 }
 
+// 기존 연도 탭에서 날짜~잔액 7칸만 읽는다 (오른쪽 요약표까지 통째로 읽으면 느려서 잠금이 길어짐).
+// 반환: { values: 7칸짜리 행 배열(1행부터), header: {row, col: 0}, col: 시트의 날짜 열 번호(1부터) }
+function readLegacy_(sh) {
+  const lastRow = sh.getLastRow();
+  if (lastRow < 1) return null;
+  const top = sh.getRange(1, 1, Math.min(50, lastRow), sh.getLastColumn()).getValues();
+  const h = findLegacyHeader_(top);
+  if (!h) return null;
+  const values = sh.getRange(1, h.col + 1, lastRow, 7).getValues();
+  return { values: values, header: { row: h.row, col: 0 }, col: h.col + 1 };
+}
+
 // 앱 거래 → 기존 연도 탭 한 줄 [날짜, 내역, 분류, 수입, 지출, 이체] (잔액은 따로 처리)
 function legacyLine_(r, asDate) {
   const p = r.date.split('-').map(Number);
@@ -228,19 +245,20 @@ function mirrorToYearSheets_(clean) {
 }
 
 function appendLegacyRows_(sh, rows) {
-  const values = sh.getDataRange().getValues();
-  const h = findLegacyHeader_(values);
-  if (!h) throw new Error("'날짜/내역' 제목 줄을 찾지 못했어요");
-  // 날짜·내역 칸 기준 마지막 거래 줄 (오른쪽 요약표나 미리 채워 둔 잔액 수식 줄은 무시)
+  const L = readLegacy_(sh);
+  if (!L) throw new Error("'날짜/내역' 제목 줄을 찾지 못했어요");
+  const values = L.values;
+  const h = L.header;
+  // 날짜·내역 칸 기준 마지막 거래 줄 (미리 채워 둔 잔액 수식 줄은 무시)
   let last = h.row;
   for (let i = h.row + 1; i < values.length; i++) {
-    if (String(values[i][h.col]).trim() !== '' || String(values[i][h.col + 1]).trim() !== '') last = i;
+    if (String(values[i][0]).trim() !== '' || String(values[i][1]).trim() !== '') last = i;
   }
-  const col = h.col + 1;      // 1부터 세는 열 번호
+  const col = L.col;          // 1부터 세는 열 번호
   const lastRow = last + 1;   // 1부터 세는 행 번호
-  const useDate = values[last][h.col] instanceof Date;
+  const useDate = values[last][0] instanceof Date;
   const balFormula = last > h.row ? sh.getRange(lastRow, col + 6).getFormulaR1C1() : '';
-  let bal = toNumber_(values[last][h.col + 6]) || 0;
+  let bal = toNumber_(values[last][6]) || 0;
   rows.forEach(function (r, k) {
     const rowNum = lastRow + 1 + k;
     if (last > h.row) {
@@ -294,24 +312,39 @@ function newId_() {
   return 't_' + Utilities.getUuid().replace(/-/g, '').slice(0, 12);
 }
 
+function readTx_(sh) {
+  const last = sh.getLastRow();
+  return last >= 2 ? sh.getRange(2, 1, last - 1, HEADERS.length).getValues() : [];
+}
+
+// 읽기는 잠금 없이 한다. 시트에서 직접 추가해 id가 없는 거래 줄이 있을 때만 잠깐 잠금을 잡고 id를 붙인다.
 function list_() {
   const sh = txSheet_();
-  const last = sh.getLastRow();
   const tz = sheetTz_();
+  let values = readTx_(sh);
+  const needsId = function (v) { return !v[0] && normalizeSheetRow_(v, tz); };
+  if (values.some(needsId)) {
+    const lock = LockService.getScriptLock();
+    if (lock.tryLock(5000)) {
+      try {
+        values = readTx_(sh); // 잠금 안에서 다시 읽어 줄 위치가 바뀌지 않았음을 보장
+        values.forEach(function (v, i) {
+          if (needsId(v)) { v[0] = newId_(); sh.getRange(i + 2, 1).setValue(v[0]); }
+        });
+      } finally {
+        lock.releaseLock();
+      }
+    }
+  }
   const rows = [];
   let skipped = 0;
-  if (last >= 2) {
-    const values = sh.getRange(2, 1, last - 1, HEADERS.length).getValues();
-    values.forEach(function (v, i) {
-      if (v.every(function (c) { return c === '' || c === null; })) return; // 빈 줄
-      if (!v[0]) { // 시트에서 직접 추가한 줄: id 부여
-        v[0] = newId_();
-        sh.getRange(i + 2, 1).setValue(v[0]);
-      }
-      const row = normalizeSheetRow_(v, tz);
-      if (row) rows.push(row); else skipped++;
-    });
-  }
+  values.forEach(function (v, i) {
+    if (v.every(function (c) { return c === '' || c === null; })) return; // 빈 줄
+    const row = normalizeSheetRow_(v, tz);
+    if (!row) { skipped++; return; }
+    if (!row.id) row.id = 'noid_' + (i + 2); // id를 못 붙인 경우(잠금 실패): 다음 동기화 때 붙음
+    rows.push(row);
+  });
   return { status: 'ok', settings: readSettings_(), rows: rows, skipped: skipped };
 }
 
@@ -379,12 +412,11 @@ function removeFromYearSheet_(row) {
   const sh = SpreadsheetApp.getActive().getSheetByName(y + '년');
   if (!sh) return [];
   try {
-    const values = sh.getDataRange().getValues();
-    const h = findLegacyHeader_(values);
-    if (!h) return ["'" + y + "년' 탭에서 제목 줄을 찾지 못해 그 탭에서는 지우지 않았어요"];
-    const i = findLegacyMatch_(values, h, row, Number(y), sheetTz_());
+    const L = readLegacy_(sh);
+    if (!L) return ["'" + y + "년' 탭에서 제목 줄을 찾지 못해 그 탭에서는 지우지 않았어요"];
+    const i = findLegacyMatch_(L.values, L.header, row, Number(y), sheetTz_());
     if (i === -1) return ["'" + y + "년' 탭에서 같은 줄을 찾지 못했어요. 필요하면 직접 지워 주세요"];
-    const col = h.col + 1;
+    const col = L.col;
     const rowNum = i + 1;
     // 잔액 수식이 윗줄을 참조하면 당겨진 줄이 #REF!가 되므로, 지우기 전 수식 모양을 기억했다가 다시 넣는다
     const balFormula = sh.getRange(rowNum, col + 6).getFormulaR1C1();
