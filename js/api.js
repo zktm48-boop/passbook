@@ -71,5 +71,6 @@ export async function addTransactions(cfg, rows, fetchImpl = defaultFetch, reque
   return { ids: d.ids, warnings: d.warnings || [] };
 }
 export async function deleteTransaction(cfg, id, fetchImpl = defaultFetch) {
-  await call(cfg, { method: 'POST', body: { action: 'delete', token: cfg.token, id } }, fetchImpl);
+  const d = await call(cfg, { method: 'POST', body: { action: 'delete', token: cfg.token, id } }, fetchImpl);
+  return { warnings: d.warnings || [] };
 }

@@ -44,7 +44,8 @@ test('addTransactions / deleteTransaction POST text/plain JSON', async () => {
   assert.equal(calls[0].method, 'POST');
   assert.match(calls[0].headers['Content-Type'], /^text\/plain/);
   assert.equal(JSON.parse(calls[0].body).action, 'add');
-  await deleteTransaction(cfg, 't_1', fetchImpl);
+  const del = await deleteTransaction(cfg, 't_1', fetchImpl);
+  assert.deepEqual(del.warnings, []);
   assert.deepEqual(JSON.parse(calls[1].body), { action: 'delete', token: 'secret', id: 't_1' });
 });
 

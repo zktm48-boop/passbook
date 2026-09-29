@@ -353,10 +353,46 @@ function remove_(id) {
     const ids = sh.getRange(2, 1, last - 1, 1).getValues();
     for (let i = 0; i < ids.length; i++) {
       if (String(ids[i][0]) === String(id)) {
+        const row = normalizeSheetRow_(sh.getRange(i + 2, 1, 1, HEADERS.length).getValues()[0], sheetTz_());
         sh.deleteRow(i + 2);
-        return { status: 'ok' };
+        const warnings = row ? removeFromYearSheet_(row) : [];
+        return { status: 'ok', warnings: warnings };
       }
     }
   }
   throw new Error('이미 지워졌거나 없는 거래예요. 동기화 후 다시 확인해 주세요');
+}
+
+// 기존 연도 탭에서 같은 거래(날짜·구분·내역·금액) 줄을 아래쪽부터 찾는다. 없으면 -1
+function findLegacyMatch_(values, header, row, year, tz) {
+  for (let i = values.length - 1; i > header.row; i--) {
+    const r = convertLegacyRow_(values[i].slice(header.col, header.col + 7), year, tz);
+    if (r && r.row && r.row.date === row.date && r.row.kind === row.kind &&
+        r.row.name === row.name && r.row.amount === row.amount) return i;
+  }
+  return -1;
+}
+
+// 기존 연도 탭에서 그 줄의 날짜~잔액 7칸만 지우고 아래 칸을 위로 당긴다 (오른쪽 요약표는 그대로)
+function removeFromYearSheet_(row) {
+  const y = row.date.slice(0, 4);
+  const sh = SpreadsheetApp.getActive().getSheetByName(y + '년');
+  if (!sh) return [];
+  try {
+    const values = sh.getDataRange().getValues();
+    const h = findLegacyHeader_(values);
+    if (!h) return ["'" + y + "년' 탭에서 제목 줄을 찾지 못해 그 탭에서는 지우지 않았어요"];
+    const i = findLegacyMatch_(values, h, row, Number(y), sheetTz_());
+    if (i === -1) return ["'" + y + "년' 탭에서 같은 줄을 찾지 못했어요. 필요하면 직접 지워 주세요"];
+    const col = h.col + 1;
+    const rowNum = i + 1;
+    // 잔액 수식이 윗줄을 참조하면 당겨진 줄이 #REF!가 되므로, 지우기 전 수식 모양을 기억했다가 다시 넣는다
+    const balFormula = sh.getRange(rowNum, col + 6).getFormulaR1C1();
+    sh.getRange(rowNum, col, 1, 7).deleteCells(SpreadsheetApp.Dimension.ROWS);
+    const moved = sh.getRange(rowNum, col + 6);
+    if (balFormula && moved.getFormula()) moved.setFormulaR1C1(balFormula);
+    return [];
+  } catch (err) {
+    return ["'" + y + "년' 탭에서 지우지 못했어요: " + ((err && err.message) || err)];
+  }
 }

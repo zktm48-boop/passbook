@@ -222,13 +222,13 @@ function renderLedger() {
 async function onDelete(id) {
   const row = state.rows.find(r => r.id === id);
   if (!row || !requireConfig()) return;
-  if (!confirm(`"${row.name}" ${won(row.amount)}원 (${KIND_LABEL[row.kind]})을 삭제할까요?\n구글 시트에서도 지워져요.`)) return;
+  if (!confirm(`"${row.name}" ${won(row.amount)}원 (${KIND_LABEL[row.kind]})을 삭제할까요?\n구글 시트(거래 탭과 연도 탭)에서도 지워져요.`)) return;
   try {
-    await deleteTransaction(state.config, id);
+    const { warnings } = await deleteTransaction(state.config, id);
     state.rows = state.rows.filter(r => r.id !== id);
     persist();
     renderAll();
-    showToast('삭제했어요');
+    showToast(warnings.length ? '삭제했어요. 다만 ' + warnings.join(' / ') : '삭제했어요', warnings.length ? 5000 : 2400);
   } catch (e) {
     showToast('삭제 실패: ' + e.message, 4000);
   }

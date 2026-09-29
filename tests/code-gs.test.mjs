@@ -110,3 +110,18 @@ test('legacyLine_ builds a row in the old yearly-tab format', () => {
   const asDate = gs.legacyLine_({ date: '2026-03-05', kind: 'expense', name: 'a', cat: 'b', amount: 1 }, true)[0];
   assert.equal(asDate.getFullYear() * 10000 + (asDate.getMonth() + 1) * 100 + asDate.getDate(), 20260305);
 });
+
+test('findLegacyMatch_ finds the matching ledger line from the bottom', () => {
+  const gs = loadGs();
+  const values = [
+    ['', '날짜', '내역', '분류', '수입', '지출', '이체', '잔액', '요약표'],
+    ['', '01월 24일 (토)', '마트', '식비', '', '2,500', '', '1', 'x'],
+    ['', '01월 25일 (일)', '카페', '카페', '', '4,000', '', '2', 'y'],
+    ['', '01월 24일 (토)', '마트', '식비', '', '2,500', '', '3', 'z'],
+  ];
+  const header = { row: 0, col: 1 };
+  const row = { date: '2026-01-24', kind: 'expense', name: '마트', cat: '식비', amount: 2500 };
+  assert.equal(gs.findLegacyMatch_(values, header, row, 2026, 'Asia/Seoul'), 3); // 아래쪽 먼저
+  assert.equal(gs.findLegacyMatch_(values, header, { ...row, amount: 999 }, 2026, 'Asia/Seoul'), -1);
+  assert.equal(gs.findLegacyMatch_(values, header, { ...row, kind: 'income' }, 2026, 'Asia/Seoul'), -1);
+});
