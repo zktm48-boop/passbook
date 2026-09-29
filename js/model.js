@@ -52,18 +52,29 @@ export function savingRates(totals) {
   return totals.income.map((inc, i) => (inc > 0 ? Math.round(((inc - totals.expense[i]) / inc) * 1000) / 10 : null));
 }
 
-export function ledgerForMonth(rows, startBalance, year, month) {
-  const prefix = `${year}-${pad(month)}`;
+// 전체 거래를 날짜순(같은 날은 원래 순서)으로 정렬하고 각 줄에 누적 잔액을 붙인다
+export function withBalances(rows, startBalance) {
   const sorted = rows
     .map((row, i) => ({ row, i }))
     .sort((a, b) => (a.row.date < b.row.date ? -1 : a.row.date > b.row.date ? 1 : a.i - b.i));
-  const out = [];
   let bal = startBalance;
-  for (const { row } of sorted) {
-    bal += signed(row);
-    if (row.date.startsWith(prefix)) out.push({ ...row, balance: bal });
-  }
-  return out;
+  return sorted.map(({ row }) => { bal += signed(row); return { ...row, balance: bal }; });
+}
+
+export function ledgerForMonth(rows, startBalance, year, month) {
+  const prefix = `${year}-${pad(month)}`;
+  return withBalances(rows, startBalance).filter(r => r.date.startsWith(prefix));
+}
+
+// 내역·분류·금액으로 검색 (대소문자·쉼표 무시). 빈 검색어면 빈 배열
+export function searchRows(rowsWithBalance, query) {
+  const q = String(query ?? '').trim().toLowerCase();
+  if (!q) return [];
+  const qNum = q.replace(/[,\s원₩]/g, '');
+  return rowsWithBalance.filter(r =>
+    r.name.toLowerCase().includes(q) ||
+    r.cat.toLowerCase().includes(q) ||
+    (/^\d+$/.test(qNum) && String(r.amount).includes(qNum)));
 }
 
 export function isDuplicate(c, rows) {

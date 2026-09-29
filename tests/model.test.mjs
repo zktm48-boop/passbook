@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { pickYear, monthRange, latestDataMonth, monthlyTotals, categoryTotals, endOfMonth, balanceAt, savingRates, ledgerForMonth, isDuplicate } from '../js/model.js';
+import { pickYear, monthRange, latestDataMonth, monthlyTotals, categoryTotals, endOfMonth, balanceAt, savingRates, ledgerForMonth, isDuplicate, withBalances, searchRows } from '../js/model.js';
 
 const r = (id, date, kind, name, cat, amount, summary = false) => ({ id, date, kind, name, cat, amount, summary });
 const rows = [
@@ -59,4 +59,19 @@ test('ledgerForMonth: date order, stable within a day, running balance', () => {
 test('isDuplicate matches date+name+amount', () => {
   assert.equal(isDuplicate({ date: '2026-01-10', name: '이마트', amount: 300 }, rows), true);
   assert.equal(isDuplicate({ date: '2026-01-10', name: '이마트', amount: 301 }, rows), false);
+});
+
+test('withBalances gives every row its running balance in date order', () => {
+  const all = withBalances(rows, 100);
+  assert.deepEqual(all.map(x => x.id), ['e', 'a', 'b', 'c', 'd']);
+  assert.deepEqual(all.map(x => x.balance), [90, 1090, 790, 590, 540]);
+});
+
+test('searchRows matches name, category, or amount (commas ignored), case-insensitive', () => {
+  const all = withBalances(rows, 100);
+  assert.deepEqual(searchRows(all, '이마트').map(x => x.id), ['b']);
+  assert.deepEqual(searchRows(all, '저축').map(x => x.id), ['c']);
+  assert.deepEqual(searchRows(all, '1,000').map(x => x.id), ['a']);
+  assert.deepEqual(searchRows(all, '  ').map(x => x.id), []);
+  assert.deepEqual(searchRows([{ ...rows[0], name: 'GS25 편의점' }], 'gs25').length, 1);
 });

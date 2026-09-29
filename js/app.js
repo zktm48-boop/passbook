@@ -1,5 +1,5 @@
 import { listTransactions, addTransactions, deleteTransaction, loadConfig, saveConfig, validateConfig, loadCache, saveCache } from './api.js';
-import { pickYear, monthRange, latestDataMonth, monthlyTotals, categoryTotals, endOfMonth, balanceAt, savingRates, ledgerForMonth, isDuplicate } from './model.js';
+import { pickYear, monthRange, latestDataMonth, monthlyTotals, categoryTotals, endOfMonth, balanceAt, savingRates, ledgerForMonth, isDuplicate, withBalances, searchRows } from './model.js';
 import { buildMerchantMap, guessCategory, CATEGORY_KEYWORDS, DEFAULT_CATEGORY } from './categorize.js';
 import { parseTableRows, parsePdfLines, extractPdfLines } from './parsers.js';
 import { formatKoreanDate, localISODate } from './dates.js';
@@ -188,19 +188,42 @@ function renderCharts() {
 }
 
 /* ---------- 거래내역 ---------- */
+const SORT_KEY = 'passbook_ledger_desc';
+let ledgerDesc = (() => { try { return localStorage.getItem(SORT_KEY) !== '0'; } catch { return true; } })();
+let ledgerQuery = '';
+
 function renderLedger() {
   const card = $('ledgerCard');
-  const items = ledgerForMonth(state.rows, state.settings.startBalance, state.year, state.month);
+  const summary = $('searchSummary');
+  $('ledgerSort').textContent = ledgerDesc ? '최신순 ↓' : '오래된순 ↑';
+  let items;
+  if (ledgerQuery.trim()) {
+    // 검색 중: 선택한 달과 상관없이 전체 거래에서 찾는다
+    items = searchRows(withBalances(state.rows, state.settings.startBalance), ledgerQuery);
+    const sum = kind => items.filter(r => r.kind === kind).reduce((a, r) => a + r.amount, 0);
+    summary.textContent = `검색 결과 ${items.length}건 · 수입 ${won(sum('income'))} · 지출 ${won(sum('expense'))} · 이체 ${won(sum('transfer'))}`;
+    summary.hidden = false;
+  } else {
+    items = ledgerForMonth(state.rows, state.settings.startBalance, state.year, state.month);
+    summary.hidden = true;
+  }
   if (!items.length) {
-    card.innerHTML = `<div class="empty"><div class="empty-mark">帳</div>
+    card.innerHTML = ledgerQuery.trim()
+      ? `<div class="empty"><p><b>"${esc(ledgerQuery.trim())}"에 맞는 거래가 없어요</b></p></div>`
+      : `<div class="empty"><div class="empty-mark">帳</div>
       <p><b>${state.month}월 거래가 아직 없어요</b></p>
       <p>입력 탭에서 기록하거나 명세서를 올려 보세요.</p></div>`;
     return;
   }
+  if (ledgerDesc) items = items.slice().reverse();
+  const showYear = ledgerQuery.trim() && new Set(items.map(r => r.date.slice(0, 4))).size > 1;
   let html = '';
   let lastDay = null;
   for (const r of items) {
-    if (r.date !== lastDay) { html += `<div class="ledger-day">${formatKoreanDate(r.date)}</div>`; lastDay = r.date; }
+    if (r.date !== lastDay) {
+      html += `<div class="ledger-day">${showYear ? r.date.slice(0, 4) + '년 ' : ''}${formatKoreanDate(r.date)}</div>`;
+      lastDay = r.date;
+    }
     const cls = r.kind === 'income' ? 'in' : r.kind === 'expense' ? 'out' : 'tr';
     const sign = r.kind === 'income' ? '+' : r.kind === 'expense' ? '-' : '↔';
     html += `<div class="ledger-row">
@@ -431,6 +454,12 @@ function bindEvents() {
     state.catKind = b.dataset.kind;
     renderCatList();
   }));
+  $('ledgerSearch').addEventListener('input', e => { ledgerQuery = e.target.value; renderLedger(); });
+  $('ledgerSort').addEventListener('click', () => {
+    ledgerDesc = !ledgerDesc;
+    try { localStorage.setItem(SORT_KEY, ledgerDesc ? '1' : '0'); } catch {}
+    renderLedger();
+  });
   $('ledgerCard').addEventListener('click', e => {
     const btn = e.target.closest('.led-del');
     if (btn) onDelete(btn.dataset.id);
