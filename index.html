@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>창호미니 통장</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="창호미니 통장">
+<meta name="theme-color" content="#152A3B">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@500;700;900&family=Noto+Sans+KR:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js" integrity="sha384-DhxhYObIMeMNGyAG7iK11OHzBIKyEIeRL0ad1iFPAOwZB8iirUlTT0O/WJJUk8+o" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" integrity="sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e" crossorigin="anonymous"></script>
+<style>
+  :root{
+    --paper:#F6F1E4;
+    --paper-dim:#EDE6D3;
+    --navy:#152A3B;
+    --navy-soft:#2B4256;
+    --brass:#B8894F;
+    --brass-soft:#D8B47B;
+    --income:#2F8F72;
+    --expense:#C6543A;
+    --line:#CBC0A4;
+    --ink-faint:#8A7F68;
+    --radius:18px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(circle at 15% -10%, rgba(184,137,79,0.14), transparent 55%),
+      var(--paper);
+    color:var(--navy);
+    font-family:'Noto Sans KR',sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .app{max-width:480px;margin:0 auto;padding:20px 16px 60px;position:relative;}
+
+  /* ===== HERO / PASSBOOK COVER ===== */
+  .cover{
+    background:linear-gradient(155deg,var(--navy) 0%, var(--navy-soft) 100%);
+    border-radius:22px;
+    padding:28px 24px 24px;
+    color:var(--paper);
+    position:relative;
+    overflow:hidden;
+    box-shadow:0 18px 40px -18px rgba(21,42,59,0.55);
+  }
+  .cover::before{
+    content:"";
+    position:absolute;inset:0;
+    background-image:repeating-linear-gradient(115deg, rgba(255,255,255,0.035) 0 2px, transparent 2px 26px);
+    pointer-events:none;
+  }
+  .cover-eyebrow{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    letter-spacing:0.18em;
+    color:var(--brass-soft);
+    text-transform:uppercase;
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .cover-title{
+    font-family:'Noto Serif KR',serif;
+    font-weight:700;
+    font-size:22px;
+    margin:10px 0 2px;
+    letter-spacing:-0.01em;
+  }
+  .cover-sub{font-size:12.5px;color:rgba(246,241,228,0.6);margin-bottom:22px;}
+  .balance-row{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;}
+  .balance-label{font-size:12px;color:rgba(246,241,228,0.65);margin-bottom:6px;}
+  .balance-amount{
+    font-family:'IBM Plex Mono',monospace;
+    font-weight:600;
+    font-size:34px;
+    letter-spacing:-0.01em;
+  }
+  .balance-amount .won{font-size:18px;margin-right:2px;color:var(--brass-soft);}
+  .stamp{
+    width:64px;height:64px;border-radius:50%;
+    border:2px solid var(--brass);
+    display:flex;align-items:center;justify-content:center;
+    flex-direction:column;
+    color:var(--brass);
+    font-family:'Noto Serif KR',serif;
+    font-weight:700;
+    transform:rotate(-8deg);
+    flex-shrink:0;
+    opacity:0.9;
+    animation:stampIn .5s cubic-bezier(.2,1.4,.4,1) both;
+  }
+  .stamp span:first-child{font-size:9px;letter-spacing:0.1em;}
+  .stamp span:last-child{font-size:14px;margin-top:2px;}
+  @keyframes stampIn{from{transform:rotate(-8deg) scale(1.6);opacity:0;}to{transform:rotate(-8deg) scale(1);opacity:0.9;}}
+
+  .cover-foot{
+    margin-top:20px;padding-top:16px;
+    border-top:1px dashed rgba(246,241,228,0.25);
+    display:flex;justify-content:space-between;font-size:12px;
+  }
+  .cover-foot b{font-family:'IBM Plex Mono',monospace;font-weight:600;}
+  .cover-foot .in b{color:#8FD9BC;}
+  .cover-foot .out b{color:#F0A08C;}
+
+  /* ===== MONTH SELECTOR ===== */
+  .months{
+    display:flex;gap:6px;overflow-x:auto;margin:18px 0 4px;
+    padding-bottom:2px;
+    scrollbar-width:none;
+  }
+  .months::-webkit-scrollbar{display:none;}
+  .month-chip{
+    flex:0 0 auto;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12.5px;font-weight:500;
+    padding:7px 13px;border-radius:100px;
+    border:1px solid var(--line);
+    background:transparent;color:var(--ink-faint);
+    cursor:pointer;transition:.15s;
+  }
+  .month-chip.active{background:var(--navy);border-color:var(--navy);color:var(--paper);}
+
+  /* ===== TABS ===== */
+  .tabs{display:flex;gap:2px;margin:18px 0 14px;background:var(--paper-dim);border-radius:12px;padding:3px;}
+  .tab{flex:1;text-align:center;padding:9px 0;font-size:13px;font-weight:700;border-radius:9px;cursor:pointer;color:var(--ink-faint);transition:.15s;}
+  .tab.active{background:var(--navy);color:var(--paper);}
+
+  .panel{display:none;}
+  .panel.active{display:block;animation:fadeUp .35s ease both;}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
+
+  .card{
+    background:#FFFDF8;
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:18px;
+    margin-bottom:14px;
+  }
+  .card-title{
+    font-family:'Noto Serif KR',serif;font-weight:700;font-size:15px;
+    display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px;
+  }
+  .card-title .note{font-family:'Noto Sans KR';font-weight:400;font-size:11.5px;color:var(--ink-faint);}
+
+  /* chart card */
+  canvas{max-width:100%;}
+
+  /* ===== LEDGER ===== */
+  .ledger-day{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;color:var(--ink-faint);
+    margin:18px 0 6px;letter-spacing:0.04em;
+  }
+  .ledger-day:first-child{margin-top:0;}
+  .ledger-row{
+    display:flex;align-items:center;gap:10px;
+    padding:9px 0;
+    border-bottom:1px dotted var(--line);
+  }
+  .ledger-row:last-child{border-bottom:none;}
+  .led-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+  .led-dot.in{background:var(--income);}
+  .led-dot.out{background:var(--expense);}
+  .led-mid{flex:1;min-width:0;}
+  .led-name{font-size:13.5px;font-weight:500;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .led-cat{font-size:11px;color:var(--ink-faint);margin-top:1px;}
+  .led-amt{font-family:'IBM Plex Mono',monospace;font-size:13.5px;font-weight:600;white-space:nowrap;}
+  .led-amt.in{color:var(--income);}
+  .led-amt.out{color:var(--expense);}
+  .led-bal{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--ink-faint);min-width:64px;text-align:right;}
+
+  .empty{
+    text-align:center;padding:46px 10px;color:var(--ink-faint);
+  }
+  .empty-mark{font-size:26px;margin-bottom:10px;font-family:'Noto Serif KR',serif;color:var(--brass);}
+  .empty p{font-size:13px;margin:2px 0;line-height:1.6;}
+
+  /* ===== CATEGORY LIST ===== */
+  .cat-item{padding:12px 0;border-bottom:1px solid var(--paper-dim);}
+  .cat-item:last-child{border-bottom:none;}
+  .cat-top{display:flex;justify-content:space-between;align-items:center;font-size:13.5px;margin-bottom:7px;}
+  .cat-top .nm{font-weight:700;}
+  .cat-top .amt{font-family:'IBM Plex Mono',monospace;font-weight:600;}
+  .cat-bar-bg{height:7px;border-radius:5px;background:var(--paper-dim);overflow:hidden;}
+  .cat-bar-fill{height:100%;border-radius:5px;background:linear-gradient(90deg,var(--brass),var(--expense));}
+  .cat-pct{font-size:10.5px;color:var(--ink-faint);margin-top:4px;font-family:'IBM Plex Mono',monospace;}
+
+  .toggle-row{display:flex;gap:6px;margin-bottom:14px;}
+  .toggle-btn{
+    flex:1;text-align:center;padding:8px 0;border-radius:10px;font-size:12.5px;font-weight:700;
+    border:1px solid var(--line);cursor:pointer;color:var(--ink-faint);
+  }
+  .toggle-btn.active.in{background:rgba(47,143,114,0.12);border-color:var(--income);color:var(--income);}
+  .toggle-btn.active.out{background:rgba(198,84,58,0.12);border-color:var(--expense);color:var(--expense);}
+
+  .foot-note{
+    text-align:center;font-size:10.5px;color:var(--ink-faint);margin-top:22px;
+    font-family:'IBM Plex Mono',monospace;letter-spacing:0.04em;
+  }
+
+  /* ===== INPUT FORM ===== */
+  .kind-row{display:flex;gap:6px;margin-bottom:16px;}
+  .kind-btn{
+    flex:1;text-align:center;padding:10px 0;border-radius:10px;font-size:13px;font-weight:700;
+    border:1px solid var(--line);cursor:pointer;color:var(--ink-faint);transition:.15s;
+  }
+  .kind-btn.active[data-kind="income"]{background:rgba(47,143,114,0.12);border-color:var(--income);color:var(--income);}
+  .kind-btn.active[data-kind="expense"]{background:rgba(198,84,58,0.12);border-color:var(--expense);color:var(--expense);}
+  .kind-btn.active[data-kind="transfer"]{background:rgba(184,137,79,0.14);border-color:var(--brass);color:var(--brass);}
+
+  .field{margin-bottom:14px;}
+  .field label{
+    display:block;font-size:11.5px;color:var(--ink-faint);margin-bottom:6px;
+    font-family:'IBM Plex Mono',monospace;letter-spacing:0.03em;
+  }
+  .field input, .field select{
+    width:100%;padding:11px 12px;border-radius:10px;border:1px solid var(--line);
+    background:var(--paper);color:var(--navy);font-size:14px;font-family:'Noto Sans KR',sans-serif;
+    outline:none;
+  }
+  .field input:focus, .field select:focus{border-color:var(--brass);}
+  .amt-input-wrap{position:relative;}
+  .amt-input-wrap span{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--ink-faint);font-size:14px;}
+  .amt-input-wrap input{padding-left:26px;font-family:'IBM Plex Mono',monospace;}
+
+  .submit-btn{
+    width:100%;padding:13px 0;border-radius:12px;border:none;
+    background:var(--navy);color:var(--paper);font-size:14.5px;font-weight:700;
+    cursor:pointer;font-family:'Noto Serif KR',serif;letter-spacing:0.02em;
+    box-shadow:0 10px 20px -10px rgba(21,42,59,0.5);
+    transition:.15s;
+  }
+  .submit-btn:active{transform:scale(0.98);}
+  .submit-btn:disabled{opacity:0.45;cursor:not-allowed;}
+
+  .recent-added{margin-top:20px;}
+  .recent-added .card-title{margin-bottom:8px;}
+  .clear-link{
+    display:block;text-align:center;margin-top:14px;font-size:11.5px;color:var(--ink-faint);
+    text-decoration:underline;cursor:pointer;background:none;border:none;font-family:'Noto Sans KR';
+  }
+  .toast{
+    position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(10px);
+    background:var(--navy);color:var(--paper);padding:10px 18px;border-radius:100px;
+    font-size:12.5px;font-weight:600;opacity:0;pointer-events:none;transition:.25s;
+    box-shadow:0 12px 24px -10px rgba(0,0,0,0.4);white-space:nowrap;z-index:50;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+  /* ===== STATEMENT PREVIEW ===== */
+  .preview-row{
+    display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px dotted var(--line);
+  }
+  .preview-row:last-child{border-bottom:none;}
+  .preview-check{flex-shrink:0;width:16px;height:16px;accent-color:var(--brass);}
+  .preview-mid{flex:1;min-width:0;}
+  .preview-name{font-size:13px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .preview-date{font-size:10.5px;color:var(--ink-faint);}
+  .preview-amt{font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:600;color:var(--expense);white-space:nowrap;min-width:70px;text-align:right;}
+  .preview-cat-select{
+    font-size:11.5px;padding:5px 6px;border-radius:8px;border:1px solid var(--line);
+    background:var(--paper);color:var(--navy);max-width:96px;
+  }
+
+  /* ===== 추가 CSS ===== */
+  body{padding-top:env(safe-area-inset-top);}
+  .led-dot.tr{background:var(--brass);}
+  .led-amt.tr{color:var(--brass);}
+  .sum-badge{
+    display:inline-block;margin-left:6px;padding:1px 6px;border-radius:6px;vertical-align:1px;
+    font-size:10px;font-weight:700;color:var(--brass);border:1px solid var(--brass-soft);
+  }
+  .led-del{
+    flex-shrink:0;width:26px;height:26px;border-radius:50%;border:1px solid var(--line);
+    background:transparent;color:var(--ink-faint);font-size:15px;line-height:1;cursor:pointer;
+  }
+  .led-del:active{background:var(--paper-dim);}
+  .banner{
+    margin:10px 0 0;padding:9px 12px;border-radius:10px;font-size:11.5px;line-height:1.5;
+    background:rgba(198,84,58,0.10);color:var(--expense);border:1px solid rgba(198,84,58,0.3);
+  }
+  .banner[hidden]{display:none;}
+  .preview-dup{font-size:10px;color:var(--expense);margin-left:6px;font-weight:700;}
+  .toast{white-space:normal;max-width:calc(100% - 32px);text-align:center;}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="cover">
+    <div class="cover-eyebrow"><span>창호미니 부자되기 프로젝트</span><span id="yearTag"></span></div>
+    <div class="cover-title">창호미니 가족 통장</div>
+    <div class="cover-sub" id="periodLabel"></div>
+    <div class="balance-row">
+      <div>
+        <div class="balance-label">잔액</div>
+        <div class="balance-amount"><span class="won">₩</span><span id="balanceNum">0</span></div>
+      </div>
+      <div class="stamp"><span>SAVED</span><span>認</span></div>
+    </div>
+    <div class="cover-foot">
+      <div class="in">수입 <b id="footIn">0</b></div>
+      <div class="out">지출 <b id="footOut">0</b></div>
+      <div>저축 <b id="footSave" style="color:var(--brass-soft)">0</b></div>
+    </div>
+  </div>
+
+  <div class="months" id="monthBar"></div>
+  <div style="text-align:right;margin:6px 2px 0;">
+    <span id="syncBtn" style="font-size:11.5px;color:var(--brass);cursor:pointer;font-family:'IBM Plex Mono',monospace;">⟳ 시트와 동기화</span>
+    <span id="syncTime" style="font-size:10.5px;color:var(--ink-faint);margin-left:8px;"></span>
+  </div>
+  <div class="banner" id="banner" hidden></div>
+
+  <div class="tabs">
+    <div class="tab active" data-panel="dash">대시보드</div>
+    <div class="tab" data-panel="ledger">거래내역</div>
+    <div class="tab" data-panel="cat">카테고리</div>
+    <div class="tab" data-panel="add">입력</div>
+  </div>
+
+  <div class="panel active" id="panel-dash">
+    <div class="card">
+      <div class="card-title">월별 수입·지출<span class="note" id="flowNote"></span></div>
+      <canvas id="flowChart" height="190"></canvas>
+    </div>
+    <div class="card">
+      <div class="card-title">지출 구성<span class="note" id="catNote">선택한 달</span></div>
+      <canvas id="donutChart" height="220"></canvas>
+    </div>
+    <div class="card">
+      <div class="card-title">저축률<span class="note">수입 대비</span></div>
+      <canvas id="rateChart" height="150"></canvas>
+    </div>
+  </div>
+
+  <div class="panel" id="panel-ledger">
+    <div class="card" id="ledgerCard" style="padding-top:14px;"></div>
+  </div>
+
+  <div class="panel" id="panel-cat">
+    <div class="card">
+      <div class="toggle-row">
+        <div class="toggle-btn active out" data-kind="expense">지출 항목</div>
+        <div class="toggle-btn in" data-kind="income">수입 항목</div>
+      </div>
+      <div id="catList"></div>
+    </div>
+  </div>
+
+  <div class="panel" id="panel-add">
+    <div class="card">
+      <div class="card-title">명세서 업로드<span class="note">엑셀 · PDF</span></div>
+      <input type="file" id="inStatementFile" accept=".xls,.xlsx,.csv,.pdf" style="width:100%;font-size:12.5px;color:var(--navy);">
+      <div style="font-size:11px;color:var(--ink-faint);margin-top:8px;line-height:1.6;">
+        ① <b>날짜 / 항목 / 금액</b> 세 열짜리 표 — 항목을 그대로 분류로 써요.<br>
+        ② 현대카드 등 <b>카드 명세서 엑셀</b> — 가맹점 이름을 보고 분류를 추측해요.<br>
+        ③ <b>하나카드 PDF 명세서</b>도 인식해요.<br>
+        이미 기록된 거래는 "이미 있음"으로 표시하고 체크를 풀어 둬요.
+      </div>
+    </div>
+
+    <div class="card" id="previewCard" style="display:none;">
+      <div class="card-title">불러온 거래 미리보기<span class="note" id="previewCount"></span></div>
+      <div id="previewList"></div>
+      <button class="submit-btn" id="bulkSubmitBtn" style="margin-top:12px;">선택한 거래 일괄 등록</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">새 거래 입력<span class="note" id="addMonthNote"></span></div>
+      <div class="kind-row">
+        <div class="kind-btn active" data-kind="expense">지출</div>
+        <div class="kind-btn" data-kind="income">수입</div>
+        <div class="kind-btn" data-kind="transfer">이체/저축</div>
+      </div>
+      <div class="field"><label>날짜</label><input type="date" id="inDate"></div>
+      <div class="field"><label>내역</label><input type="text" id="inName" placeholder="예: 이마트 사상점" maxlength="100"></div>
+      <div class="field">
+        <label>분류</label>
+        <input type="text" id="inCat" list="catOptions" placeholder="목록에서 고르거나 새로 입력" maxlength="30">
+        <datalist id="catOptions"></datalist>
+      </div>
+      <div class="field">
+        <label>금액</label>
+        <div class="amt-input-wrap"><span>₩</span><input type="number" id="inAmt" placeholder="0" min="1" step="1" inputmode="numeric"></div>
+      </div>
+      <button class="submit-btn" id="submitBtn">통장에 기록하기</button>
+    </div>
+
+    <div class="card" id="settingsCard">
+      <div class="card-title">시트 연결<span class="note" id="syncStatus">연결 안 됨</span></div>
+      <div class="field">
+        <label>Apps Script 웹 앱 주소</label>
+        <input type="url" id="inWebhookUrl" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>보안 토큰</label>
+        <input type="password" id="inWebhookToken" placeholder="Apps Script 스크립트 속성 TOKEN 값" autocomplete="off">
+      </div>
+      <button class="submit-btn" id="saveConfigBtn" style="background:var(--brass);">저장하고 불러오기</button>
+      <div style="font-size:11px;color:var(--ink-faint);margin-top:10px;line-height:1.6;">
+        이 폰(브라우저)에만 저장돼요. 설정 방법은 docs/SETUP.md를 참고하세요.
+      </div>
+    </div>
+  </div>
+
+  <div class="foot-note">창호미니 가계부 · 구글 시트 연동</div>
+</div>
+<div class="toast" id="toast"></div>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
