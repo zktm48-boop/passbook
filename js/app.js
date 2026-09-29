@@ -270,11 +270,13 @@ function requestIdFor(rows) {
 }
 
 async function saveRows(rows) {
-  const ids = await addTransactions(state.config, rows, undefined, requestIdFor(rows));
+  const { ids, warnings } = await addTransactions(state.config, rows, undefined, requestIdFor(rows));
   lastAdd = null;
   const known = new Set(state.rows.map(r => r.id));
   rows.forEach((r, i) => { if (!known.has(ids[i])) state.rows.push({ ...r, id: ids[i], summary: false }); });
   persist();
+  // 앱·거래 탭에는 저장됐지만 기존 연도 탭 기록이 실패한 경우 (성공 토스트 뒤에 보여줌)
+  if (warnings.length) setTimeout(() => showToast('저장은 됐어요. 다만 ' + warnings.join(' / '), 5000), 2500);
   return ids;
 }
 

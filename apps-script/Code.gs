@@ -189,6 +189,71 @@ function findLegacyHeader_(values) {
   return null;
 }
 
+// 앱 거래 → 기존 연도 탭 한 줄 [날짜, 내역, 분류, 수입, 지출, 이체] (잔액은 따로 처리)
+function legacyLine_(r, asDate) {
+  const p = r.date.split('-').map(Number);
+  const days = ['일', '월', '화', '수', '목', '금', '토'];
+  const dow = new Date(Date.UTC(p[0], p[1] - 1, p[2])).getUTCDay();
+  const label = ('0' + p[1]).slice(-2) + '월 ' + ('0' + p[2]).slice(-2) + '일 (' + days[dow] + ')';
+  return [
+    asDate ? new Date(p[0], p[1] - 1, p[2]) : label,
+    escapeCell_(r.name),
+    escapeCell_(r.cat),
+    r.kind === 'income' ? r.amount : '',
+    r.kind === 'expense' ? r.amount : '',
+    r.kind === 'transfer' ? -r.amount : '', // 기존 탭은 이체를 음수로 적음
+  ];
+}
+
+// 추가된 거래를 연도별 기존 탭('2026년' 등) 맨 아래에도 적는다. 실패해도 앱 저장은 유지하고 경고만 돌려준다.
+function mirrorToYearSheets_(clean) {
+  const ss = SpreadsheetApp.getActive();
+  const byYear = {};
+  clean.forEach(function (r) {
+    const y = r.date.slice(0, 4);
+    if (!byYear[y]) byYear[y] = [];
+    byYear[y].push(r);
+  });
+  const warnings = [];
+  Object.keys(byYear).forEach(function (y) {
+    const sh = ss.getSheetByName(y + '년');
+    if (!sh) { warnings.push("'" + y + "년' 탭이 없어서 그 탭에는 적지 않았어요"); return; }
+    try {
+      appendLegacyRows_(sh, byYear[y]);
+    } catch (err) {
+      warnings.push("'" + y + "년' 탭에 적지 못했어요: " + ((err && err.message) || err));
+    }
+  });
+  return warnings;
+}
+
+function appendLegacyRows_(sh, rows) {
+  const values = sh.getDataRange().getValues();
+  const h = findLegacyHeader_(values);
+  if (!h) throw new Error("'날짜/내역' 제목 줄을 찾지 못했어요");
+  // 날짜·내역 칸 기준 마지막 거래 줄 (오른쪽 요약표나 미리 채워 둔 잔액 수식 줄은 무시)
+  let last = h.row;
+  for (let i = h.row + 1; i < values.length; i++) {
+    if (String(values[i][h.col]).trim() !== '' || String(values[i][h.col + 1]).trim() !== '') last = i;
+  }
+  const col = h.col + 1;      // 1부터 세는 열 번호
+  const lastRow = last + 1;   // 1부터 세는 행 번호
+  const useDate = values[last][h.col] instanceof Date;
+  const balFormula = last > h.row ? sh.getRange(lastRow, col + 6).getFormulaR1C1() : '';
+  let bal = toNumber_(values[last][h.col + 6]) || 0;
+  rows.forEach(function (r, k) {
+    const rowNum = lastRow + 1 + k;
+    if (last > h.row) {
+      sh.getRange(lastRow, col, 1, 7).copyTo(sh.getRange(rowNum, col, 1, 7), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+    }
+    sh.getRange(rowNum, col, 1, 6).setValues([legacyLine_(r, useDate)]);
+    const balCell = sh.getRange(rowNum, col + 6);
+    bal += r.kind === 'income' ? r.amount : -r.amount;
+    if (balFormula) balCell.setFormulaR1C1(balFormula);   // 윗줄 잔액 수식을 그대로 이어서
+    else if (!balCell.getFormula()) balCell.setValue(bal); // 수식이 없으면 계산값
+  });
+}
+
 // Apps Script 편집기에서 한 번 실행: 기존 '2026년' 탭의 거래를 '거래' 탭으로 복사 (기존 탭은 그대로 둠)
 function importLedger() {
   importFromYearSheet_('2026년');
@@ -276,7 +341,8 @@ function add_(rows, requestId) {
   const clean = rows.map(validateRow_); // 하나라도 틀리면 여기서 중단 → 아무것도 쓰지 않음
   const ids = appendRows_(clean);
   if (cache) cache.put(key, JSON.stringify(ids), 21600);
-  return { status: 'ok', ids: ids };
+  const warnings = mirrorToYearSheets_(clean);
+  return { status: 'ok', ids: ids, warnings: warnings };
 }
 
 function remove_(id) {

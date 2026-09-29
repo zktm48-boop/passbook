@@ -38,8 +38,9 @@ test('listTransactions sends GET with action and token', async () => {
 test('addTransactions / deleteTransaction POST text/plain JSON', async () => {
   const calls = [];
   const fetchImpl = async (url, opts) => { calls.push(opts); return jsonRes({ status: 'ok', ids: ['t_1'] }); };
-  const ids = await addTransactions(cfg, [{ date: '2026-09-01', kind: 'expense', name: 'a', cat: 'b', amount: 1 }], fetchImpl);
+  const { ids, warnings } = await addTransactions(cfg, [{ date: '2026-09-01', kind: 'expense', name: 'a', cat: 'b', amount: 1 }], fetchImpl);
   assert.deepEqual(ids, ['t_1']);
+  assert.deepEqual(warnings, []);
   assert.equal(calls[0].method, 'POST');
   assert.match(calls[0].headers['Content-Type'], /^text\/plain/);
   assert.equal(JSON.parse(calls[0].body).action, 'add');

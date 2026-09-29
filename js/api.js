@@ -68,7 +68,7 @@ export async function listTransactions(cfg, fetchImpl = defaultFetch) {
 // requestId가 같은 재시도는 서버가 한 번만 저장한다 (타임아웃 후 다시 눌러도 중복 없음)
 export async function addTransactions(cfg, rows, fetchImpl = defaultFetch, requestId) {
   const d = await call(cfg, { method: 'POST', body: { action: 'add', token: cfg.token, rows, requestId } }, fetchImpl);
-  return d.ids;
+  return { ids: d.ids, warnings: d.warnings || [] };
 }
 export async function deleteTransaction(cfg, id, fetchImpl = defaultFetch) {
   await call(cfg, { method: 'POST', body: { action: 'delete', token: cfg.token, id } }, fetchImpl);

@@ -64,6 +64,7 @@ test('add_ with the same requestId appends only once and returns the same ids', 
   gs.CacheService = { getScriptCache: () => ({ get: k => store.get(k) ?? null, put: (k, v) => store.set(k, v) }) };
   let appends = 0;
   gs.appendRows_ = clean => { appends++; return clean.map((_, i) => 't_' + appends + '_' + i); };
+  gs.mirrorToYearSheets_ = () => [];
   const rows = [{ date: '2026-09-01', kind: 'expense', name: 'a', cat: 'b', amount: 1 }];
   const first = gs.add_(rows, 'req-1');
   const second = gs.add_(rows, 'req-1');
@@ -98,4 +99,14 @@ test('findLegacyHeader_ finds 날짜/내역 in any column, tolerating spaces', (
   ];
   assert.deepEqual(JSON.parse(JSON.stringify(gs.findLegacyHeader_(values))), { row: 3, col: 1 });
   assert.equal(gs.findLegacyHeader_([['a', 'b']]), null);
+});
+
+test('legacyLine_ builds a row in the old yearly-tab format', () => {
+  const gs = loadGs();
+  const line = r => JSON.parse(JSON.stringify(gs.legacyLine_(r, false)));
+  assert.deepEqual(line({ date: '2026-01-24', kind: 'expense', name: '마트', cat: '식비', amount: 2500 }), ['01월 24일 (토)', "'마트", "'식비", '', 2500, '']);
+  assert.deepEqual(line({ date: '2026-09-01', kind: 'income', name: '월급', cat: '월급', amount: 100 }), ['09월 01일 (화)', "'월급", "'월급", 100, '', '']);
+  assert.deepEqual(line({ date: '2026-09-01', kind: 'transfer', name: '적금', cat: '저축', amount: 90000 }), ['09월 01일 (화)', "'적금", "'저축", '', '', -90000]);
+  const asDate = gs.legacyLine_({ date: '2026-03-05', kind: 'expense', name: 'a', cat: 'b', amount: 1 }, true)[0];
+  assert.equal(asDate.getFullYear() * 10000 + (asDate.getMonth() + 1) * 100 + asDate.getDate(), 20260305);
 });
