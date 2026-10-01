@@ -193,6 +193,10 @@
   .cat-bar-fill{height:100%;border-radius:5px;background:linear-gradient(90deg,var(--brass),var(--expense));}
   .cat-pct{font-size:10.5px;color:var(--ink-faint);margin-top:4px;font-family:'IBM Plex Mono',monospace;}
   .cat-item{cursor:pointer;}
+  .settings-summary{list-style:none;cursor:pointer;margin-bottom:0;}
+  .settings-summary::-webkit-details-marker{display:none;}
+  #settingsCard[open] .settings-summary{margin-bottom:14px;}
+  #settingsCard[open] .cat-caret{transform:rotate(90deg);}
   .cat-caret{display:inline-block;margin-right:6px;font-size:10px;color:var(--ink-faint);transition:transform .15s;}
   .cat-item.open .cat-caret{transform:rotate(90deg);}
   .cat-detail{margin-top:10px;padding:4px 10px;border-radius:10px;background:var(--paper);cursor:default;}
@@ -423,8 +427,8 @@
       <button class="submit-btn" id="submitBtn">통장에 기록하기</button>
     </div>
 
-    <div class="card" id="settingsCard">
-      <div class="card-title">시트 연결<span class="note" id="syncStatus">연결 안 됨</span></div>
+    <details class="card" id="settingsCard">
+      <summary class="card-title settings-summary"><span><span class="cat-caret">▸</span>시트 연결</span><span class="note" id="syncStatus">연결 안 됨</span></summary>
       <div class="field">
         <label>Apps Script 웹 앱 주소</label>
         <input type="url" id="inWebhookUrl" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off">
@@ -435,9 +439,9 @@
       </div>
       <button class="submit-btn" id="saveConfigBtn" style="background:var(--brass);">저장하고 불러오기</button>
       <div style="font-size:11px;color:var(--ink-faint);margin-top:10px;line-height:1.6;">
-        이 폰(브라우저)에만 저장돼요. 설정 방법은 docs/SETUP.md를 참고하세요.
+        기본으로는 앱에 내장된 연결 정보를 써요. 여기서 바꿔 저장하면 이 폰(브라우저)에서만 그 값을 써요. 설정 방법은 docs/SETUP.md를 참고하세요.
       </div>
-    </div>
+    </details>
   </div>
 
   <div class="foot-note">창호미니 가계부 · 구글 시트 연동</div>

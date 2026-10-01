@@ -80,6 +80,7 @@ async function sync({ quiet = false } = {}) {
     if (data.skipped) showToast(`시트에서 형식이 맞지 않는 줄 ${data.skipped}개는 건너뛰었어요`, 4000);
     else if (!quiet) showToast(`시트와 동기화했어요 · 거래 ${data.rows.length}건 ✓`);
   } catch (e) {
+    $('settingsCard').open = true;
     showBanner('시트에 연결하지 못해서 마지막으로 저장된 데이터를 보여주고 있어요 · ' + e.message);
     if (!quiet) showToast('동기화 실패: ' + e.message, 4000);
   } finally {
@@ -91,6 +92,7 @@ async function sync({ quiet = false } = {}) {
 function requireConfig() {
   if (state.config) return true;
   switchTab('add');
+  $('settingsCard').open = true;
   $('settingsCard').scrollIntoView({ behavior: 'smooth', block: 'center' });
   showToast('먼저 시트 연결 정보를 입력해 주세요');
   return false;
@@ -451,6 +453,7 @@ async function onSaveConfig() {
   state.config = cfg;
   updateSyncStatus();
   await sync();
+  if ($('banner').hidden) $('settingsCard').open = false;
 }
 
 /* ---------- 전체 렌더 ---------- */
