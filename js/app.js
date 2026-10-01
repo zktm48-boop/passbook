@@ -3,6 +3,7 @@ import { pickYear, monthRange, latestDataMonth, monthlyTotals, categoryTotals, e
 import { buildMerchantMap, guessCategory, CATEGORY_KEYWORDS, DEFAULT_CATEGORY } from './categorize.js';
 import { parseTableRows, parsePdfLines, extractPdfLines } from './parsers.js';
 import { formatKoreanDate, localISODate } from './dates.js';
+import { DEFAULT_CONFIG } from './config.js';
 
 const COLORS = { navy: '#152A3B', income: '#2F8F72', expense: '#C6543A', brass: '#B8894F', faint: '#8A7F68', grid: '#E4DCC7', card: '#FFFDF8' };
 const PALETTE = ['#C6543A', '#B8894F', '#D8A24C', '#8FAE8A', '#5C8A9E', '#8B6B9E', '#B57D6C', '#A8A190'];
@@ -15,7 +16,7 @@ const KIND_LABEL = { income: '수입', expense: '지출', transfer: '이체' };
 
 const today = new Date();
 const state = {
-  config: loadConfig(),
+  config: loadConfig() || (validateConfig(DEFAULT_CONFIG) ? null : { ...DEFAULT_CONFIG }),
   settings: { startBalance: 0, startDate: '' },
   rows: [],
   loaded: false,
@@ -23,6 +24,7 @@ const state = {
   month: today.getMonth() + 1,
   tab: 'dash',
   catKind: 'expense',
+  catOpen: null, // 카테고리 탭에서 펼친 항목 이름
   addKind: 'expense',
   pending: [],
   merchantMap: {},
@@ -268,11 +270,29 @@ function renderCatList() {
   const max = entries[0][1];
   const total = entries.reduce((a, [, v]) => a + v, 0);
   const fill = state.catKind === 'income' ? 'background:linear-gradient(90deg,#2F8F72,#8FAE8A);' : '';
-  list.innerHTML = entries.map(([name, val]) => `<div class="cat-item">
-      <div class="cat-top"><span class="nm">${esc(name)}</span><span class="amt">${won(val)}</span></div>
+  const prefix = `${state.year}-${String(state.month).padStart(2, '0')}`;
+  const cls = state.catKind === 'income' ? 'in' : 'out';
+  const sign = state.catKind === 'income' ? '+' : '-';
+  list.innerHTML = entries.map(([name, val]) => {
+    const open = state.catOpen === name;
+    let detail = '';
+    if (open) {
+      const items = state.rows
+        .filter(r => r.kind === state.catKind && r.cat === name && r.date.startsWith(prefix))
+        .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+      detail = `<div class="cat-detail">${items.map(r => `<div class="cat-tx">
+          <span class="cat-tx-date">${formatKoreanDate(r.date)}</span>
+          <span class="cat-tx-name">${esc(r.name)}${r.summary ? '<span class="sum-badge">월 합계</span>' : ''}</span>
+          <span class="cat-tx-amt ${cls}">${sign}${won(r.amount)}</span>
+        </div>`).join('')}</div>`;
+    }
+    return `<div class="cat-item${open ? ' open' : ''}" data-cat="${esc(name)}">
+      <div class="cat-top"><span class="nm"><span class="cat-caret">▸</span>${esc(name)}</span><span class="amt">${won(val)}</span></div>
       <div class="cat-bar-bg"><div class="cat-bar-fill" style="width:${(val / max * 100).toFixed(0)}%;${fill}"></div></div>
       <div class="cat-pct">${state.month}월 전체의 ${(val / total * 100).toFixed(1)}%</div>
-    </div>`).join('');
+      ${detail}
+    </div>`;
+  }).join('');
 }
 
 /* ---------- 입력 ---------- */
@@ -452,9 +472,16 @@ function bindEvents() {
   document.querySelectorAll('.toggle-btn').forEach(b => b.addEventListener('click', () => {
     document.querySelectorAll('.toggle-btn').forEach(x => x.classList.toggle('active', x === b));
     state.catKind = b.dataset.kind;
+    state.catOpen = null;
     renderCatList();
   }));
-  $('ledgerSearch').addEventListener('input', e => { ledgerQuery = e.target.value; renderLedger(); });
+  $('catList').addEventListener('click', e => {
+    const item = e.target.closest('.cat-item');
+    if (!item) return;
+    state.catOpen = state.catOpen === item.dataset.cat ? null : item.dataset.cat;
+    renderCatList();
+  });
+    $('ledgerSearch').addEventListener('input', e => { ledgerQuery = e.target.value; renderLedger(); });
   $('ledgerSort').addEventListener('click', () => {
     ledgerDesc = !ledgerDesc;
     try { localStorage.setItem(SORT_KEY, ledgerDesc ? '1' : '0'); } catch {}

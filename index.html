@@ -192,6 +192,17 @@
   .cat-bar-bg{height:7px;border-radius:5px;background:var(--paper-dim);overflow:hidden;}
   .cat-bar-fill{height:100%;border-radius:5px;background:linear-gradient(90deg,var(--brass),var(--expense));}
   .cat-pct{font-size:10.5px;color:var(--ink-faint);margin-top:4px;font-family:'IBM Plex Mono',monospace;}
+  .cat-item{cursor:pointer;}
+  .cat-caret{display:inline-block;margin-right:6px;font-size:10px;color:var(--ink-faint);transition:transform .15s;}
+  .cat-item.open .cat-caret{transform:rotate(90deg);}
+  .cat-detail{margin-top:10px;padding:4px 10px;border-radius:10px;background:var(--paper);cursor:default;}
+  .cat-tx{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px dotted var(--line);font-size:12.5px;}
+  .cat-tx:last-child{border-bottom:none;}
+  .cat-tx-date{flex-shrink:0;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-faint);min-width:58px;}
+  .cat-tx-name{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .cat-tx-amt{flex-shrink:0;font-family:'IBM Plex Mono',monospace;font-weight:600;}
+  .cat-tx-amt.in{color:var(--income);}
+  .cat-tx-amt.out{color:var(--expense);}
 
   .toggle-row{display:flex;gap:6px;margin-bottom:14px;}
   .toggle-btn{
