@@ -30,6 +30,7 @@ const state = {
   merchantMap: {},
   syncing: false,
   saving: false,
+  lastSyncAt: 0,
 };
 const charts = {};
 
@@ -73,6 +74,8 @@ async function sync({ quiet = false } = {}) {
   try {
     const data = await listTransactions(state.config);
     setData(data);
+    state.lastSyncAt = Date.now();
+    populateCatOptions();
     saveCache({ settings: data.settings, rows: data.rows, savedAt: Date.now() });
     hideBanner();
     $('syncTime').textContent = '마지막 동기화 ' + new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
@@ -529,6 +532,12 @@ function init() {
   renderAll();
   if (state.config) sync({ quiet: true });
   else requireConfig();
+  // 폰에서 앱을 다시 열면(백그라운드 → 화면) 시트에서 최신 데이터를 자동으로 불러온다.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible' || !state.config || state.saving) return;
+    if (Date.now() - state.lastSyncAt < 30 * 1000) return;
+    sync({ quiet: true });
+  });
   if ('serviceWorker' in navigator) {
     // 새 버전이 배포되면 앱을 열거나 다시 볼 때 바로 받아서 한 번 새로고침한다.
     const hadController = !!navigator.serviceWorker.controller;
