@@ -242,6 +242,18 @@
     outline:none;
   }
   .field input:focus, .field select:focus{border-color:var(--brass);}
+  .cat-input-wrap{position:relative;}
+  .cat-input-wrap input{padding-right:48px;}
+  .cat-input-wrap select{
+    position:absolute;top:0;right:0;bottom:0;width:46px;padding:0;
+    opacity:0;cursor:pointer;
+  }
+  .cat-arrow{
+    position:absolute;top:1px;right:1px;bottom:1px;width:44px;
+    display:flex;align-items:center;justify-content:center;
+    border-left:1px solid var(--line);border-radius:0 9px 9px 0;
+    color:var(--brass);font-size:16px;pointer-events:none;
+  }
   .amt-input-wrap{position:relative;}
   .amt-input-wrap span{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--ink-faint);font-size:14px;}
   .amt-input-wrap input{padding-left:26px;font-family:'IBM Plex Mono',monospace;}
@@ -417,7 +429,11 @@
       <div class="field"><label>내역</label><input type="text" id="inName" placeholder="예: 이마트 사상점" maxlength="100"></div>
       <div class="field">
         <label>분류</label>
-        <input type="text" id="inCat" list="catOptions" placeholder="목록에서 고르거나 새로 입력" maxlength="30">
+        <div class="cat-input-wrap">
+          <input type="text" id="inCat" list="catOptions" placeholder="▾ 눌러 고르거나 새로 입력" maxlength="30">
+          <select id="catPicker" aria-label="분류 목록에서 선택"></select>
+          <span class="cat-arrow" aria-hidden="true">▾</span>
+        </div>
         <datalist id="catOptions"></datalist>
       </div>
       <div class="field">

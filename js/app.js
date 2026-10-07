@@ -335,7 +335,10 @@ function reportSaveError(e, keepMsg) {
 }
 
 function populateCatOptions() {
-  $('catOptions').innerHTML = categoryNames(state.addKind).map(n => `<option value="${esc(n)}">`).join('');
+  const names = categoryNames(state.addKind);
+  $('catOptions').innerHTML = names.map(n => `<option value="${esc(n)}">`).join('');
+  $('catPicker').innerHTML = `<option value="" selected>${names.length ? '분류 선택' : '등록된 분류 없음'}</option>`
+    + names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
 }
 
 async function onSubmit() {
@@ -472,6 +475,11 @@ function bindEvents() {
     state.addKind = b.dataset.kind;
     populateCatOptions();
   }));
+  $('catPicker').addEventListener('change', e => {
+    if (!e.target.value) return;
+    $('inCat').value = e.target.value;
+    e.target.value = '';
+  });
   document.querySelectorAll('.toggle-btn').forEach(b => b.addEventListener('click', () => {
     document.querySelectorAll('.toggle-btn').forEach(x => x.classList.toggle('active', x === b));
     state.catKind = b.dataset.kind;
