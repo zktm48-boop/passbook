@@ -1,5 +1,5 @@
 // 앱 파일: 네트워크 우선(온라인이면 항상 최신) → 실패 시 캐시.  CDN/폰트: 캐시 우선.  Apps Script API: 가로채지 않음.
-const CACHE = 'passbook-v6';
+const CACHE = 'passbook-v7';
 const APP_SHELL = [
   './', './index.html', './manifest.webmanifest',
   './js/app.js', './js/api.js', './js/model.js', './js/categorize.js', './js/parsers.js', './js/dates.js', './js/config.js',
@@ -15,7 +15,7 @@ const CDN = [
 self.addEventListener('install', e => {
   e.waitUntil((async () => {
     const c = await caches.open(CACHE);
-    await c.addAll(APP_SHELL);
+    await c.addAll(APP_SHELL.map(u => new Request(u, { cache: 'reload' })));
     await Promise.all(CDN.map(u => c.add(new Request(u, { mode: 'cors' })).catch(() => {})));
     await self.skipWaiting();
   })());

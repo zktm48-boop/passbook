@@ -529,7 +529,22 @@ function init() {
   renderAll();
   if (state.config) sync({ quiet: true });
   else requireConfig();
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(err => console.warn('서비스 워커 등록 실패', err));
+  if ('serviceWorker' in navigator) {
+    // 새 버전이 배포되면 앱을 열거나 다시 볼 때 바로 받아서 한 번 새로고침한다.
+    const hadController = !!navigator.serviceWorker.controller;
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadController || reloaded) return;
+      reloaded = true;
+      location.reload();
+    });
+    navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then(reg => {
+      reg.update().catch(() => {});
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') reg.update().catch(() => {});
+      });
+    }).catch(err => console.warn('서비스 워커 등록 실패', err));
+  }
 }
 
 init();
