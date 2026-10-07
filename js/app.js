@@ -336,7 +336,6 @@ function reportSaveError(e, keepMsg) {
 
 function populateCatOptions() {
   const names = categoryNames(state.addKind);
-  $('catOptions').innerHTML = names.map(n => `<option value="${esc(n)}">`).join('');
   $('catPicker').innerHTML = `<option value="" selected>${names.length ? '분류 선택' : '등록된 분류 없음'}</option>`
     + names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
 }

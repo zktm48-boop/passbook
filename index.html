@@ -431,11 +431,10 @@
       <div class="field">
         <label>분류</label>
         <div class="cat-input-wrap">
-          <input type="text" id="inCat" list="catOptions" placeholder="목록에서 고르거나 새로 입력" maxlength="30">
+          <input type="text" id="inCat" placeholder="목록에서 고르거나 새로 입력" maxlength="30" autocomplete="off">
           <select id="catPicker" aria-label="분류 목록에서 선택"></select>
           <span class="cat-arrow" aria-hidden="true">목록<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
         </div>
-        <datalist id="catOptions"></datalist>
       </div>
       <div class="field">
         <label>금액</label>
