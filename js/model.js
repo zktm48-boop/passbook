@@ -1,4 +1,4 @@
-import { lastDayOfMonth } from './dates.js';
+import { lastDayOfMonth, toISODate } from './dates.js';
 
 const pad = n => String(n).padStart(2, '0');
 const yearOf = r => Number(r.date.slice(0, 4));
@@ -79,4 +79,12 @@ export function searchRows(rowsWithBalance, query) {
 
 export function isDuplicate(c, rows) {
   return rows.some(r => r.date === c.date && r.amount === c.amount && r.name === c.name);
+}
+
+// 업로드 미리보기에서 날짜를 바꾼 거래: 새 날짜로 '이미 있음' 여부를 다시 판단한다. 잘못된 날짜면 그대로 둔다
+export function withPendingDate(item, iso, rows) {
+  const p = String(iso ?? '').split('-').map(Number);
+  if (p.length !== 3 || !toISODate(p[0], p[1], p[2])) return item;
+  const moved = { ...item, date: iso };
+  return { ...moved, dup: isDuplicate(moved, rows) };
 }

@@ -1,5 +1,5 @@
 import { listTransactions, addTransactions, deleteTransaction, loadConfig, saveConfig, validateConfig, loadCache, saveCache } from './api.js';
-import { pickYear, monthRange, latestDataMonth, monthlyTotals, categoryTotals, endOfMonth, balanceAt, savingRates, ledgerForMonth, isDuplicate, withBalances, searchRows } from './model.js';
+import { pickYear, monthRange, latestDataMonth, monthlyTotals, categoryTotals, endOfMonth, balanceAt, savingRates, ledgerForMonth, isDuplicate, withPendingDate, withBalances, searchRows } from './model.js';
 import { buildMerchantMap, guessCategory, CATEGORY_KEYWORDS, DEFAULT_CATEGORY } from './categorize.js';
 import { parseTableRows, parsePdfLines, extractPdfLines } from './parsers.js';
 import { formatKoreanDate, localISODate } from './dates.js';
@@ -393,6 +393,7 @@ async function onFileChosen(e) {
       const dup = isDuplicate(it, state.rows);
       return { ...it, cat: it.cat || guessCategory(it.name, state.merchantMap), include: !dup, dup };
     });
+    $('previewBulkDate').value = '';
     renderPreview();
   } catch (err) {
     console.error(err);
@@ -412,7 +413,9 @@ function renderPreview() {
       <input type="checkbox" class="preview-check" data-i="${i}" ${r.include ? 'checked' : ''}>
       <div class="preview-mid">
         <div class="preview-name">${esc(r.name)}</div>
-        <div class="preview-date">${formatKoreanDate(r.date)}${r.dup ? '<span class="preview-dup">이미 있음</span>' : ''}</div>
+        <div class="preview-date">
+          <input type="date" class="preview-date-input" data-i="${i}" value="${r.date}" aria-label="${esc(r.name)} 날짜">${r.dup ? '<span class="preview-dup">이미 있음</span>' : ''}
+        </div>
       </div>
       <select class="preview-cat-select" data-i="${i}">
         ${options.map(c => `<option value="${esc(c)}" ${c === r.cat ? 'selected' : ''}>${esc(c)}</option>`).join('')}
@@ -420,6 +423,17 @@ function renderPreview() {
       <div class="preview-amt">${won(r.amount)}</div>
     </div>`;
   }).join('');
+}
+
+// 체크한 거래의 날짜를 한꺼번에 바꾼다 (파일 날짜 대신 원하는 날짜로 기록할 때)
+function onBulkDateApply() {
+  const iso = $('previewBulkDate').value;
+  if (!iso) { showToast('적용할 날짜를 먼저 골라 주세요'); return; }
+  let n = 0;
+  state.pending = state.pending.map(r => (r.include ? (n++, withPendingDate(r, iso, state.rows)) : r));
+  if (!n) { showToast('체크한 거래가 없어요'); return; }
+  renderPreview();
+  showToast(`${n}건의 날짜를 ${formatKoreanDate(iso)}로 바꿨어요`);
 }
 
 async function onBulkSubmit() {
@@ -508,7 +522,14 @@ function bindEvents() {
     const i = Number(e.target.dataset.i);
     if (e.target.classList.contains('preview-check')) state.pending[i].include = e.target.checked;
     if (e.target.classList.contains('preview-cat-select')) state.pending[i].cat = e.target.value;
+    if (e.target.classList.contains('preview-date-input')) {
+      const next = withPendingDate(state.pending[i], e.target.value, state.rows);
+      if (next === state.pending[i]) { e.target.value = next.date; return; } // 지운 값·잘못된 날짜는 되돌림
+      state.pending[i] = next;
+      renderPreview();
+    }
   });
+  $('previewBulkDateBtn').addEventListener('click', onBulkDateApply);
   $('syncBtn').addEventListener('click', () => sync());
   $('submitBtn').addEventListener('click', onSubmit);
   $('inStatementFile').addEventListener('change', onFileChosen);

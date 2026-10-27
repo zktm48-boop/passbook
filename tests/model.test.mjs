@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { pickYear, monthRange, latestDataMonth, monthlyTotals, categoryTotals, endOfMonth, balanceAt, savingRates, ledgerForMonth, isDuplicate, withBalances, searchRows } from '../js/model.js';
+import { pickYear, monthRange, latestDataMonth, monthlyTotals, categoryTotals, endOfMonth, balanceAt, savingRates, ledgerForMonth, isDuplicate, withPendingDate, withBalances, searchRows } from '../js/model.js';
 
 const r = (id, date, kind, name, cat, amount, summary = false) => ({ id, date, kind, name, cat, amount, summary });
 const rows = [
@@ -74,4 +74,14 @@ test('searchRows matches name, category, or amount (commas ignored), case-insens
   assert.deepEqual(searchRows(all, '1,000').map(x => x.id), ['a']);
   assert.deepEqual(searchRows(all, '  ').map(x => x.id), []);
   assert.deepEqual(searchRows([{ ...rows[0], name: 'GS25 편의점' }], 'gs25').length, 1);
+});
+
+test('withPendingDate changes date and re-checks duplicate', () => {
+  const item = { date: '2026-01-11', name: '이마트', amount: 300, cat: '식비', include: true, dup: false };
+  const moved = withPendingDate(item, '2026-01-10', rows);
+  assert.deepEqual(moved, { ...item, date: '2026-01-10', dup: true });
+  assert.equal(item.date, '2026-01-11'); // 원본은 그대로
+  assert.equal(withPendingDate(moved, '2026-01-12', rows).dup, false);
+  assert.equal(withPendingDate(item, '', rows), item);           // 빈 값은 무시
+  assert.equal(withPendingDate(item, '2026-02-30', rows), item); // 없는 날짜는 무시
 });
