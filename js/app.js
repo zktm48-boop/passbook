@@ -1,4 +1,4 @@
-import { listTransactions, addTransactions, deleteTransaction, loadConfig, saveConfig, validateConfig, loadCache, saveCache } from './api.js';
+import { listTransactions, addTransactions, deleteTransaction, updateAmount, loadConfig, saveConfig, validateConfig, loadCache, saveCache } from './api.js';
 import { pickYear, monthRange, latestDataMonth, monthlyTotals, categoryTotals, endOfMonth, balanceAt, savingRates, ledgerForMonth, isDuplicate, withPendingDate, withBalances, searchRows } from './model.js';
 import { buildMerchantMap, guessCategory, CATEGORY_KEYWORDS, DEFAULT_CATEGORY } from './categorize.js';
 import { parseTableRows, parsePdfLines, extractPdfLines } from './parsers.js';
@@ -243,6 +243,7 @@ function renderLedger() {
         <div class="led-amt ${cls}">${sign}${won(r.amount)}</div>
         <div class="led-bal">잔액 ${won(r.balance)}</div>
       </div>
+      <button class="led-edit" data-id="${esc(r.id)}" aria-label="금액 수정">✎</button>
       <button class="led-del" data-id="${esc(r.id)}" aria-label="삭제">×</button>
     </div>`;
   }
@@ -261,6 +262,33 @@ async function onDelete(id) {
     showToast(warnings.length ? '삭제했어요. 다만 ' + warnings.join(' / ') : '삭제했어요', warnings.length ? 5000 : 2400);
   } catch (e) {
     showToast('삭제 실패: ' + e.message, 4000);
+  }
+}
+
+async function onEditAmount(id) {
+  const row = state.rows.find(r => r.id === id);
+  if (!row || state.saving || !requireConfig()) return;
+  const input = prompt(`"${row.name}" (${KIND_LABEL[row.kind]}) 금액을 얼마로 바꿀까요?\n지금: ${won(row.amount)}원`, String(row.amount));
+  if (input === null) return;
+  const amount = Number(input.replace(/[,\s원₩]/g, ''));
+  if (!Number.isInteger(amount) || amount <= 0) { showToast('금액은 1원 이상 정수로 입력해 주세요'); return; }
+  if (amount === row.amount) return;
+  state.saving = true;
+  try {
+    const { warnings } = await updateAmount(state.config, id, amount);
+    row.amount = amount;
+    persist();
+    renderAll();
+    showToast(warnings.length ? '금액을 고쳤어요. 다만 ' + warnings.join(' / ') : `${won(amount)}원으로 고쳤어요 ✓`, warnings.length ? 5000 : 2400);
+  } catch (e) {
+    if (e.uncertain) {
+      showToast('고쳐졌는지 확인하지 못했어요. 시트에서 다시 불러올게요', 5000);
+      sync({ quiet: true });
+    } else {
+      showToast('수정 실패: ' + e.message, 4000);
+    }
+  } finally {
+    state.saving = false;
   }
 }
 
@@ -515,8 +543,10 @@ function bindEvents() {
     renderLedger();
   });
   $('ledgerCard').addEventListener('click', e => {
-    const btn = e.target.closest('.led-del');
-    if (btn) onDelete(btn.dataset.id);
+    const del = e.target.closest('.led-del');
+    if (del) onDelete(del.dataset.id);
+    const edit = e.target.closest('.led-edit');
+    if (edit) onEditAmount(edit.dataset.id);
   });
   $('previewList').addEventListener('change', e => {
     const i = Number(e.target.dataset.i);

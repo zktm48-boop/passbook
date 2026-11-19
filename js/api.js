@@ -74,3 +74,7 @@ export async function deleteTransaction(cfg, id, fetchImpl = defaultFetch) {
   const d = await call(cfg, { method: 'POST', body: { action: 'delete', token: cfg.token, id } }, fetchImpl);
   return { warnings: d.warnings || [] };
 }
+export async function updateAmount(cfg, id, amount, fetchImpl = defaultFetch) {
+  const d = await call(cfg, { method: 'POST', body: { action: 'updateAmount', token: cfg.token, id, amount } }, fetchImpl);
+  return { warnings: d.warnings || [] };
+}

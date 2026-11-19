@@ -32,6 +32,7 @@ function handle_(req) {
     if (req.action === 'list') return json_(list_());
     if (req.action === 'add') return json_(withLock_(function () { return add_(req.rows, req.requestId); }));
     if (req.action === 'delete') return json_(withLock_(function () { return remove_(req.id); }));
+    if (req.action === 'updateAmount') return json_(withLock_(function () { return updateAmount_(req.id, req.amount); }));
     return json_({ status: 'error', message: '알 수 없는 요청이에요: ' + req.action });
   } catch (err) {
     return json_({ status: 'error', message: friendlyError_(String((err && err.message) || err)) });
@@ -122,6 +123,14 @@ function escapeCell_(s) {
   return "'" + s;
 }
 
+function checkAmount_(v, where) {
+  const amount = Number(v);
+  if (!isFinite(amount) || amount <= 0 || Math.round(amount) !== amount || amount > 1e10) {
+    throw new Error(where + '금액은 1원 이상의 정수여야 해요');
+  }
+  return amount;
+}
+
 function validateRow_(r, i) {
   const where = (i + 1) + '번째 거래: ';
   if (!r || typeof r !== 'object') throw new Error(where + '형식이 잘못됐어요');
@@ -132,10 +141,7 @@ function validateRow_(r, i) {
   const cat = String(r.cat || '').trim();
   if (!name || !cat) throw new Error(where + '내역과 분류를 모두 입력해 주세요');
   if (name.length > 100 || cat.length > 30) throw new Error(where + '내역 또는 분류가 너무 길어요');
-  const amount = Number(r.amount);
-  if (!isFinite(amount) || amount <= 0 || Math.round(amount) !== amount || amount > 1e10) {
-    throw new Error(where + '금액은 1원 이상의 정수여야 해요');
-  }
+  const amount = checkAmount_(r.amount, where);
   return { date: date, kind: r.kind, name: name, cat: cat, amount: amount, summary: r.summary === true };
 }
 
@@ -394,6 +400,45 @@ function remove_(id) {
     }
   }
   throw new Error('이미 지워졌거나 없는 거래예요. 동기화 후 다시 확인해 주세요');
+}
+
+// 금액만 바꾼다. 같은 값으로 다시 와도 결과가 같아서 재시도해도 안전하다.
+function updateAmount_(id, amount) {
+  if (!id) throw new Error('수정할 거래 id가 없어요');
+  amount = checkAmount_(amount, '');
+  const sh = txSheet_();
+  const last = sh.getLastRow();
+  if (last >= 2) {
+    const ids = sh.getRange(2, 1, last - 1, 1).getValues();
+    for (let i = 0; i < ids.length; i++) {
+      if (String(ids[i][0]) === String(id)) {
+        const row = normalizeSheetRow_(sh.getRange(i + 2, 1, 1, HEADERS.length).getValues()[0], sheetTz_());
+        sh.getRange(i + 2, 6).setValue(amount);
+        const warnings = row && row.amount !== amount ? updateYearSheetAmount_(row, amount) : [];
+        return { status: 'ok', warnings: warnings };
+      }
+    }
+  }
+  throw new Error('지워졌거나 없는 거래예요. 동기화 후 다시 확인해 주세요');
+}
+
+// 기존 연도 탭에서 같은 줄의 수입/지출/이체 칸만 새 금액으로 바꾼다 (잔액 수식은 시트가 다시 계산)
+function updateYearSheetAmount_(row, amount) {
+  const y = row.date.slice(0, 4);
+  const sh = SpreadsheetApp.getActive().getSheetByName(y + '년');
+  if (!sh) return [];
+  try {
+    const L = readLegacy_(sh);
+    if (!L) return ["'" + y + "년' 탭에서 제목 줄을 찾지 못해 그 탭에서는 고치지 않았어요"];
+    const i = findLegacyMatch_(L.values, L.header, row, Number(y), sheetTz_());
+    if (i === -1) return ["'" + y + "년' 탭에서 같은 줄을 찾지 못했어요. 필요하면 직접 고쳐 주세요"];
+    const next = { date: row.date, kind: row.kind, name: row.name, cat: row.cat, amount: amount };
+    sh.getRange(i + 1, L.col + 3, 1, 3).setValues([legacyLine_(next, false).slice(3, 6)]);
+    if (!sh.getRange(i + 1, L.col + 6).getFormula()) return ["'" + y + "년' 탭 잔액 칸이 수식이 아니라서 잔액은 직접 확인해 주세요"];
+    return [];
+  } catch (err) {
+    return ["'" + y + "년' 탭에서 고치지 못했어요: " + ((err && err.message) || err)];
+  }
 }
 
 // 기존 연도 탭에서 같은 거래(날짜·구분·내역·금액) 줄을 아래쪽부터 찾는다. 없으면 -1

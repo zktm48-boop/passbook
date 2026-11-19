@@ -132,3 +132,29 @@ test('friendlyError_ translates lock timeouts', () => {
   assert.match(gs.friendlyError_('Lock timeout: another process was holding the lock for too long.'), /잠시 후 다시/);
   assert.equal(gs.friendlyError_('토큰이 올바르지 않아요'), '토큰이 올바르지 않아요');
 });
+
+test('updateAmount_ rewrites only the amount cell and mirrors to the year tab', () => {
+  const gs = loadGs();
+  const sheet = [
+    ['t_1', '2026-09-01', '지출', '이마트', '식비', 5000, '', ''],
+    ['t_2', '2026-09-02', '수입', '월급', '월급', 100, '', ''],
+  ];
+  const writes = [];
+  gs.SpreadsheetApp = { getActive: () => ({ getSpreadsheetTimeZone: () => 'Asia/Seoul' }) };
+  gs.txSheet_ = () => ({
+    getLastRow: () => sheet.length + 1,
+    getRange: (r, c, nr, nc) => ({
+      getValues: () => sheet.slice(r - 2, r - 2 + nr).map(v => v.slice(c - 1, c - 1 + nc)),
+      setValue: v => writes.push([r, c, v]),
+    }),
+  });
+  let mirrored;
+  gs.updateYearSheetAmount_ = (row, amount) => { mirrored = [row.name, row.amount, amount]; return []; };
+  const res = gs.updateAmount_('t_1', 7300);
+  assert.equal(res.status, 'ok');
+  assert.deepEqual(writes, [[2, 6, 7300]]);
+  assert.deepEqual(mirrored, ['이마트', 5000, 7300]);
+  assert.throws(() => gs.updateAmount_('t_1', 0), /금액/);
+  assert.throws(() => gs.updateAmount_('t_1', 1.5), /금액/);
+  assert.throws(() => gs.updateAmount_('t_9', 100), /없는 거래/);
+});

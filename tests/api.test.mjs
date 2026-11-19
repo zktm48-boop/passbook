@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { loadConfig, saveConfig, validateConfig, loadCache, saveCache, listTransactions, addTransactions, deleteTransaction } from '../js/api.js';
+import { loadConfig, saveConfig, validateConfig, loadCache, saveCache, listTransactions, addTransactions, deleteTransaction, updateAmount } from '../js/api.js';
 
 const memStorage = () => { const m = new Map(); return { getItem: k => m.get(k) ?? null, setItem: (k, v) => m.set(k, String(v)) }; };
 const brokenStorage = { getItem() { throw new Error('denied'); }, setItem() { throw new Error('denied'); } };
@@ -64,4 +64,11 @@ test('addTransactions sends requestId; network failures are marked uncertain', a
   assert.equal(err.uncertain, true);
   const err2 = await addTransactions(cfg, [], async () => jsonRes({ status: 'error', message: 'x' }), 'req-3').catch(e => e);
   assert.ok(!err2.uncertain);
+});
+
+test('updateAmount POSTs id and amount', async () => {
+  let body;
+  const res = await updateAmount(cfg, 't_1', 7300, async (u, o) => { body = JSON.parse(o.body); return jsonRes({ status: 'ok', warnings: ['w'] }); });
+  assert.deepEqual(body, { action: 'updateAmount', token: 'secret', id: 't_1', amount: 7300 });
+  assert.deepEqual(res.warnings, ['w']);
 });
